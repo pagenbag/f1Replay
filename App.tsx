@@ -203,12 +203,20 @@ const App: React.FC = () => {
             intervals: ints.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
         };
 
-        // Determine starting positions (First recorded position in session)
+        // Determine starting positions (First valid positive position in session)
         const starts = new Map<number, number>();
         driversData.forEach(d => {
-            const firstPos = fullSessionDataRef.current.positions.find(p => p.driver_number === d.driver_number);
+            // Find the first position that is > 0
+            const firstPos = fullSessionDataRef.current.positions.find(
+              p => p.driver_number === d.driver_number && p.position > 0
+            );
+            
             if (firstPos) {
                 starts.set(d.driver_number, firstPos.position);
+            } else {
+                 // Fallback to absolute first if no positive position found
+                 const anyPos = fullSessionDataRef.current.positions.find(p => p.driver_number === d.driver_number);
+                 if (anyPos) starts.set(d.driver_number, anyPos.position);
             }
         });
         setStartingPositions(starts);
@@ -447,6 +455,8 @@ const App: React.FC = () => {
             if (latestPos.size >= drivers.length) break; 
         }
         setCurrentPositions(Array.from(latestPos.values()));
+    } else {
+        setCurrentPositions([]);
     }
 
     if (iIdx !== -1) {
@@ -458,6 +468,8 @@ const App: React.FC = () => {
             if (latestInt.size >= drivers.length) break; 
         }
         setCurrentIntervals(Array.from(latestInt.values()));
+    } else {
+        setCurrentIntervals([]);
     }
 
     // 4. Update Current Lap

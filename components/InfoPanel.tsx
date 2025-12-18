@@ -54,7 +54,10 @@ const InfoPanel: React.FC<InfoPanelProps> = ({
       const num = d.driver_number;
       // Get latest pos (fallback)
       const posData = positions.find(p => p.driver_number === num);
-      const pos = posData ? posData.position : 999;
+      
+      const startPos = startingPositions.get(num);
+      // Use live position if available, otherwise fallback to starting position, then 999
+      const pos = posData ? posData.position : (startPos || 999);
       
       // Get intervals
       const intData = intervals.find(i => i.driver_number === num);
