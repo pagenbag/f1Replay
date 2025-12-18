@@ -99,20 +99,23 @@ const LandingPage: React.FC<LandingPageProps> = ({ years, onSelectSession }) => 
                 <h3 className="text-f1-red font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
                     <Trophy size={16} /> {title} Podium
                 </h3>
-                <div className="flex justify-center items-end gap-2 md:gap-4 h-48 mb-2">
-                    {/* P2 */}
-                    {p2 && <DriverCard driver={p2} height="h-32" order={2} />}
-                    {/* P1 */}
-                    {p1 && <DriverCard driver={p1} height="h-44" order={1} />}
-                    {/* P3 */}
-                    {p3 && <DriverCard driver={p3} height="h-24" order={3} />}
+                {/* Increased height and margins to create staggered podium steps */}
+                <div className="flex justify-center items-end gap-2 md:gap-4 h-64 pb-2">
+                    {/* P2 - Left, middle height */}
+                    {p2 && <DriverCard driver={p2} height="h-40" order={2} className="mb-6 opacity-90" />}
+                    
+                    {/* P1 - Center, tallest, highest lift */}
+                    {p1 && <DriverCard driver={p1} height="h-48" order={1} className="mb-16 scale-110 z-10" />}
+                    
+                    {/* P3 - Right, lowest height */}
+                    {p3 && <DriverCard driver={p3} height="h-36" order={3} className="mb-0 opacity-80" />}
                 </div>
             </div>
         );
     };
 
-    const DriverCard = ({ driver, height, order }: { driver: Driver, height: string, order: number }) => (
-        <div className={`flex flex-col items-center justify-end w-24 md:w-32 ${height} transition-all duration-500`}>
+    const DriverCard = ({ driver, height, order, className = "" }: { driver: Driver, height: string, order: number, className?: string }) => (
+        <div className={`flex flex-col items-center justify-end w-28 md:w-36 ${height} ${className} transition-all duration-500`}>
              <div className="relative w-full flex-1 flex items-end justify-center mb-2">
                 {driver.headshot_url ? (
                     <img src={driver.headshot_url} alt={driver.name_acronym} className="w-full object-contain max-h-full drop-shadow-xl" />
@@ -121,13 +124,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ years, onSelectSession }) => 
                         {driver.name_acronym}
                     </div>
                 )}
-                <div className="absolute -bottom-3 bg-f1-dark border border-gray-600 rounded px-2 py-0.5 text-xs font-bold z-10">
+                <div className={`absolute -bottom-3 bg-f1-dark border border-gray-600 rounded px-3 py-1 text-xs font-bold z-10 shadow-lg ${order === 1 ? 'text-yellow-400 border-yellow-500 ring-2 ring-yellow-500/20' : 'text-white'}`}>
                     P{order}
                 </div>
              </div>
-             <div className="text-center w-full bg-f1-dark/80 rounded p-1 border-t-4" style={{ borderTopColor: `#${driver.team_colour}` }}>
-                <div className="font-bold text-sm leading-tight">{driver.last_name}</div>
-                <div className="text-xs text-gray-400">#{driver.driver_number}</div>
+             <div className="text-center w-full bg-f1-dark/90 rounded-lg p-2 border-t-4 shadow-xl backdrop-blur-md" style={{ borderTopColor: `#${driver.team_colour}` }}>
+                <div className="font-bold text-sm leading-tight truncate">{driver.first_name} {driver.last_name}</div>
+                <div className="text-xs text-gray-400 mt-1 flex justify-center items-center gap-1">
+                   <span className="font-mono bg-white/10 px-1 rounded">#{driver.driver_number}</span>
+                   <span className="truncate max-w-[80px]">{driver.team_name}</span>
+                </div>
              </div>
         </div>
     );
@@ -144,7 +150,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ years, onSelectSession }) => 
                                 F1<span className="font-light opacity-90">REPLAY</span>
                             </h1>
                             <p className="text-white/80 font-mono text-sm tracking-wide mt-1">
-                                HISTORICAL TELEMETRY ARCHIVE
                             </p>
                         </div>
                     </div>
