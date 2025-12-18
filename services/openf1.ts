@@ -1,5 +1,5 @@
 import { API_BASE } from '../constants';
-import { Session, Meeting, Driver, Location, Lap, Weather, RaceControl, TeamRadio, Position, Interval, CarData } from '../types';
+import { Session, Meeting, Driver, Location, Lap, Weather, RaceControl, TeamRadio, Position, Interval, CarData, StartingGrid } from '../types';
 
 async function fetchAPI<T>(endpoint: string, params: Record<string, string | number>): Promise<T[]> {
   const url = new URL(`${API_BASE}${endpoint}`);
@@ -97,4 +97,8 @@ export const getCarData = async (sessionKey: number, driverNumber: number, start
     'date>': start,
     'date<': end
   });
+};
+
+export const getStartingGrid = async (sessionKey: number): Promise<StartingGrid[]> => {
+  return fetchAPI<StartingGrid>('/starting_grid', { session_key: sessionKey });
 };

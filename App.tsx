@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { YEARS } from './constants';
-import { getMeetings, getSessions, getDrivers, getLaps, getLocations, getWeather, getRaceControl, getTeamRadio, getPositions, getIntervals, getCarData } from './services/openf1';
-import { Meeting, Session, Driver, Location, Weather, RaceControl, TeamRadio, Position, Interval, Lap, CarData } from './types';
+import { getMeetings, getSessions, getDrivers, getLaps, getLocations, getWeather, getRaceControl, getTeamRadio, getPositions, getIntervals, getCarData, getStartingGrid } from './services/openf1';
+import { Meeting, Session, Driver, Location, Weather, RaceControl, TeamRadio, Position, Interval, Lap, CarData, StartingGrid } from './types';
 import SessionControls from './components/SessionControls';
 import TrackMap from './components/TrackMap';
 import InfoPanel from './components/InfoPanel';
@@ -170,12 +170,13 @@ const App: React.FC = () => {
       // 3. Fetch Full Session Data (Parallel)
       setLoadStatus("Downloading session data...");
       try {
-        const [w, rc, tr, pos, ints] = await Promise.all([
+        const [w, rc, tr, pos, ints, grid] = await Promise.all([
             getWeather(sessionKey, startStr, endStr),
             getRaceControl(sessionKey, startStr, endStr),
             getTeamRadio(sessionKey, startStr, endStr),
             getPositions(sessionKey, startStr, endStr),
             getIntervals(sessionKey, startStr, endStr),
+            getStartingGrid(sessionKey)
         ]);
 
         // Sort data once
@@ -187,15 +188,21 @@ const App: React.FC = () => {
             intervals: ints.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
         };
 
-        // Determine starting positions
+        // Determine starting positions from API or Fallback
         const starts = new Map<number, number>();
-        driversData.forEach(d => {
-            // Find first position entry for this driver
-            const firstPos = fullSessionDataRef.current.positions.find(p => p.driver_number === d.driver_number);
-            if (firstPos) {
-                starts.set(d.driver_number, firstPos.position);
-            }
-        });
+        
+        if (grid && grid.length > 0) {
+            // Use Official Starting Grid
+            grid.forEach(g => starts.set(g.driver_number, g.position));
+        } else {
+            // Fallback: Find first position entry for each driver
+            driversData.forEach(d => {
+                const firstPos = fullSessionDataRef.current.positions.find(p => p.driver_number === d.driver_number);
+                if (firstPos) {
+                    starts.set(d.driver_number, firstPos.position);
+                }
+            });
+        }
         setStartingPositions(starts);
 
       } catch (e) {
