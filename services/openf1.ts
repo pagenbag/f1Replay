@@ -98,3 +98,44 @@ export const getCarData = async (sessionKey: number, driverNumber: number, start
     'date<': end
   });
 };
+
+// Helper to deduce podium from position data
+// OpenF1 doesn't have a simple 'results' endpoint, so we fetch pos 1, 2, 3 and find the latest entries
+export const getPodium = async (sessionKey: number): Promise<(Driver & { position: number })[]> => {
+    try {
+        const drivers = await getDrivers(sessionKey);
+        
+        // Fetch all occurrences of pos 1, 2, 3
+        // This is imperfect but works for replay context usually
+        const [p1, p2, p3] = await Promise.all([
+            fetchAPI<Position>('/position', { session_key: sessionKey, position: 1 }),
+            fetchAPI<Position>('/position', { session_key: sessionKey, position: 2 }),
+            fetchAPI<Position>('/position', { session_key: sessionKey, position: 3 })
+        ]);
+
+        const getLast = (arr: Position[]) => arr.length > 0 ? arr.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] : null;
+
+        const results = [
+            { pos: 1, data: getLast(p1) },
+            { pos: 2, data: getLast(p2) },
+            { pos: 3, data: getLast(p3) }
+        ];
+
+        const podium: (Driver & { position: number })[] = [];
+
+        results.forEach(r => {
+            if (r.data) {
+                const driver = drivers.find(d => d.driver_number === r.data!.driver_number);
+                if (driver) {
+                    podium.push({ ...driver, position: r.pos });
+                }
+            }
+        });
+
+        return podium.sort((a,b) => a.position - b.position);
+
+    } catch (e) {
+        console.error("Error fetching podium", e);
+        return [];
+    }
+};

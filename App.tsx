@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronsRight } from 'lucide-react';
+import { ChevronsRight, ArrowLeft } from 'lucide-react';
 import { YEARS } from './constants';
-import { getMeetings, getSessions, getDrivers, getLaps, getLocations, getWeather, getRaceControl, getTeamRadio, getPositions, getIntervals, getCarData } from './services/openf1';
+import { getDrivers, getLaps, getLocations, getWeather, getRaceControl, getTeamRadio, getPositions, getIntervals, getCarData } from './services/openf1';
 import { Meeting, Session, Driver, Location, Weather, RaceControl, TeamRadio, Position, Interval, Lap, CarData } from './types';
 import SessionControls from './components/SessionControls';
 import TrackMap from './components/TrackMap';
 import InfoPanel from './components/InfoPanel';
+import LandingPage from './components/LandingPage';
 
 // Extended type for internal use to avoid repetitive Date parsing
 interface BufferedLocation extends Location {
@@ -15,7 +16,7 @@ interface BufferedCarData extends CarData {
     timestamp: number;
 }
 
-// Binary Search Helper: Finds the index of the last element <= targetTime
+// Binary Search Helper
 const findIndexBefore = <T,>(arr: T[], targetTime: number, getTime: (item: T) => number): number => {
     let low = 0;
     let high = arr.length - 1;
@@ -35,12 +36,12 @@ const findIndexBefore = <T,>(arr: T[], targetTime: number, getTime: (item: T) =>
     return result;
 };
 
+type ViewState = 'LANDING' | 'REPLAY';
+
 const App: React.FC = () => {
-  // --- Selection State ---
-  const [year, setYear] = useState<number>(YEARS[0]);
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [view, setView] = useState<ViewState>('LANDING');
+
+  // --- Session State ---
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   
   // --- Data State ---
@@ -70,16 +71,14 @@ const App: React.FC = () => {
   const [currentCarData, setCurrentCarData] = useState<CarData | null>(null);
   const [startingPositions, setStartingPositions] = useState<Map<number, number>>(new Map());
 
-  // Refs for loop management to avoid stale closures
+  // Refs
   const currentTimeRef = useRef<Date | null>(null);
   const isPlayingRef = useRef<boolean>(false);
   const isFetchingBuffer = useRef<boolean>(false);
   const bufferedUntilRef = useRef<number>(0);
   
   // Buffers
-  // Map of driver -> sorted locations with parsed timestamps
   const locationBufferRef = useRef<Map<number, BufferedLocation[]>>(new Map());
-  // Array of telemetry for selected driver
   const carDataBufferRef = useRef<BufferedCarData[]>([]);
   
   const fullSessionDataRef = useRef<{
@@ -96,24 +95,22 @@ const App: React.FC = () => {
     intervals: []
   });
 
-  // --- Fetch Meetings on Year Change ---
-  useEffect(() => {
-    getMeetings(year).then(setMeetings);
-    setSelectedMeeting(null);
-    setSelectedSession(null);
-    setSessions([]);
-  }, [year]);
+  // --- Navigation Handlers ---
+  const handleSessionSelect = (meeting: Meeting, session: Session) => {
+      setSelectedSession(session);
+      setView('REPLAY');
+  };
 
-  // --- Fetch Sessions on Meeting Change ---
-  useEffect(() => {
-    if (selectedMeeting) {
-      getSessions(selectedMeeting.meeting_key).then(setSessions);
-    }
-  }, [selectedMeeting]);
+  const handleBackToMenu = () => {
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      setView('LANDING');
+      setSelectedSession(null);
+  };
 
   // --- Initialize Session ---
   useEffect(() => {
-    if (!selectedSession) return;
+    if (!selectedSession || view !== 'REPLAY') return;
 
     const initSession = async () => {
       setIsLoading(true);
@@ -156,17 +153,14 @@ const App: React.FC = () => {
       setLoadStatus("Fetching laps & map...");
       let laps = await getLaps(sessionKey);
       
-      // Sort laps by start time for the timeline and finding current lap
       laps.sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime());
       setAllLaps(laps);
       
-      // Calculate total laps (max lap number found)
       if (laps.length > 0) {
         const maxLap = Math.max(...laps.map(l => l.lap_number));
         setTotalLaps(maxLap);
       }
 
-      // Filter for valid laps for track generation (needs duration)
       const validLapsForMap = laps.filter(l => l.lap_duration && !l.is_pit_out_lap).sort((a, b) => a.lap_duration - b.lap_duration);
       
       let trackPoints: Location[] = [];
@@ -183,7 +177,7 @@ const App: React.FC = () => {
       }
       setTrackLayout(trackPoints);
 
-      // 3. Fetch Full Session Data (Parallel)
+      // 3. Fetch Full Session Data
       setLoadStatus("Downloading session data...");
       try {
         const [w, rc, tr, pos, ints] = await Promise.all([
@@ -194,7 +188,6 @@ const App: React.FC = () => {
             getIntervals(sessionKey, startStr, endStr),
         ]);
 
-        // Sort data once
         fullSessionDataRef.current = {
             weather: w.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
             raceControl: rc.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
@@ -203,10 +196,8 @@ const App: React.FC = () => {
             intervals: ints.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
         };
 
-        // Determine starting positions (First valid positive position in session)
         const starts = new Map<number, number>();
         driversData.forEach(d => {
-            // Find the first position that is > 0
             const firstPos = fullSessionDataRef.current.positions.find(
               p => p.driver_number === d.driver_number && p.position > 0
             );
@@ -214,7 +205,6 @@ const App: React.FC = () => {
             if (firstPos) {
                 starts.set(d.driver_number, firstPos.position);
             } else {
-                 // Fallback to absolute first if no positive position found
                  const anyPos = fullSessionDataRef.current.positions.find(p => p.driver_number === d.driver_number);
                  if (anyPos) starts.set(d.driver_number, anyPos.position);
             }
@@ -225,7 +215,7 @@ const App: React.FC = () => {
           console.error("Error fetching session data", e);
       }
 
-      // 4. Initialize Buffer (Locations only)
+      // 4. Initialize Buffer
       const startDate = new Date(startStr);
       setSessionStart(startDate);
       setSessionEnd(new Date(endStr));
@@ -234,7 +224,6 @@ const App: React.FC = () => {
       bufferedUntilRef.current = startDate.getTime();
 
       setLoadStatus("Buffering telemetry...");
-      // Buffer larger initial chunk
       await fetchDynamicBuffer(startDate, 30 * 1000); 
 
       updateViewState(startDate);
@@ -245,9 +234,9 @@ const App: React.FC = () => {
 
     initSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSession]);
+  }, [selectedSession, view]);
 
-  // Buffer locations AND car data if driver selected
+  // Buffer Logic
   const fetchDynamicBuffer = async (startTime: Date, durationMs: number) => {
     if (!selectedSession) return;
     if (isFetchingBuffer.current) return;
@@ -255,14 +244,11 @@ const App: React.FC = () => {
     isFetchingBuffer.current = true;
     const endTime = new Date(startTime.getTime() + durationMs);
     
-    console.log(`Buffering: ${startTime.toISOString()} -> ${endTime.toISOString()}`);
-
     try {
         const promises: Promise<any>[] = [
             getLocations(selectedSession.session_key, startTime.toISOString(), endTime.toISOString())
         ];
 
-        // If driver selected, fetch specific telemetry
         if (selectedDriver) {
             promises.push(
                 getCarData(selectedSession.session_key, selectedDriver, startTime.toISOString(), endTime.toISOString())
@@ -273,20 +259,17 @@ const App: React.FC = () => {
         const locs: Location[] = results[0];
         const carData: CarData[] = results[1] || [];
 
-        // Process Locations
         locs.forEach(l => {
             const dNum = l.driver_number;
             if (!locationBufferRef.current.has(dNum)) {
                 locationBufferRef.current.set(dNum, []);
             }
-            // Parse date once and store as number
             locationBufferRef.current.get(dNum)?.push({
                 ...l,
                 timestamp: new Date(l.date).getTime()
             });
         });
 
-        // Process Car Data
         if (carData.length > 0) {
             carData.forEach(cd => {
                 carDataBufferRef.current.push({
@@ -294,7 +277,6 @@ const App: React.FC = () => {
                     timestamp: new Date(cd.date).getTime()
                 });
             });
-            // Ensure sorted
             carDataBufferRef.current.sort((a, b) => a.timestamp - b.timestamp);
         }
 
@@ -308,7 +290,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Replay Loop ---
+  // Replay Loop
   useEffect(() => {
     let animationFrameId: number;
     let lastTick = performance.now();
@@ -333,14 +315,11 @@ const App: React.FC = () => {
 
         updateViewState(newTime);
 
-        // Buffer Management
-        // Buffer significantly ahead (20s minimum or scaled by speed) to avoid gaps
         const bufferThreshold = Math.max(20000, 5000 * playbackSpeed);
         const timeToBufferEnd = bufferedUntilRef.current - newTime.getTime();
         
         if (timeToBufferEnd < bufferThreshold && !isFetchingBuffer.current) {
             const fetchStart = new Date(bufferedUntilRef.current);
-            // Fetch a substantial chunk
             const fetchSize = Math.max(30000, 10000 * playbackSpeed);
             await fetchDynamicBuffer(fetchStart, fetchSize); 
         }
@@ -361,25 +340,21 @@ const App: React.FC = () => {
     return () => cancelAnimationFrame(animationFrameId);
   }, [isPlaying, playbackSpeed, sessionEnd, selectedDriver]);
 
-  // Optimized View Update
+  // View Update
   const updateViewState = (time: Date) => {
     const timeMs = time.getTime();
 
-    // 1. Interpolate Cars (From Location Buffer)
+    // 1. Cars
     const activeCars: Location[] = [];
     locationBufferRef.current.forEach((locs) => {
-      // Use pre-calculated timestamp for fast lookups
       const idx = findIndexBefore<BufferedLocation>(locs, timeMs, (l) => l.timestamp);
       
-      // Interpolate if possible
       if (idx !== -1 && idx < locs.length - 1) {
         const prev = locs[idx];
         const next = locs[idx + 1];
-        
         const tPrev = prev.timestamp;
         const tNext = next.timestamp;
         
-        // Prevent division by zero if duplicates exist
         if (tNext > tPrev) {
             const ratio = (timeMs - tPrev) / (tNext - tPrev);
             activeCars.push({
@@ -394,7 +369,7 @@ const App: React.FC = () => {
     });
     setCurrentCarLocations(activeCars);
 
-    // 2. Interpolate Car Telemetry (If selected)
+    // 2. Car Data
     if (selectedDriver && carDataBufferRef.current.length > 0) {
         const cdBuffer = carDataBufferRef.current;
         const idx = findIndexBefore<BufferedCarData>(cdBuffer, timeMs, (c) => c.timestamp);
@@ -413,7 +388,6 @@ const App: React.FC = () => {
                     rpm: Math.round(prev.rpm + (next.rpm - prev.rpm) * ratio),
                     throttle: Math.round(prev.throttle + (next.throttle - prev.throttle) * ratio),
                     brake: Math.round(prev.brake + (next.brake - prev.brake) * ratio),
-                    // Gear and DRS shouldn't really interpolate floats, just take nearest or prev
                     n_gear: prev.n_gear, 
                     drs: prev.drs
                 });
@@ -427,22 +401,18 @@ const App: React.FC = () => {
         setCurrentCarData(null);
     }
 
-
-    // 3. Update State Data (From Full Session Data)
+    // 3. State Data
     const data = fullSessionDataRef.current;
 
-    // Weather
     const wIdx = findIndexBefore<Weather>(data.weather, timeMs, (w) => new Date(w.date).getTime());
     if (wIdx !== -1) setCurrentWeather(data.weather[wIdx]);
 
-    // Messages
     const rcIdx = findIndexBefore<RaceControl>(data.raceControl, timeMs, (rc) => new Date(rc.date).getTime());
     setCurrentRaceControl(rcIdx !== -1 ? data.raceControl.slice(0, rcIdx + 1) : []);
     
     const trIdx = findIndexBefore<TeamRadio>(data.teamRadio, timeMs, (tr) => new Date(tr.date).getTime());
     setCurrentTeamRadio(trIdx !== -1 ? data.teamRadio.slice(0, trIdx + 1) : []);
 
-    // Positions & Intervals (Latest per driver)
     const pIdx = findIndexBefore<Position>(data.positions, timeMs, (p) => new Date(p.date).getTime());
     const iIdx = findIndexBefore<Interval>(data.intervals, timeMs, (i) => new Date(i.date).getTime());
 
@@ -472,9 +442,6 @@ const App: React.FC = () => {
         setCurrentIntervals([]);
     }
 
-    // 4. Update Current Lap
-    // Find the latest lap start event across all drivers that happened before current time
-    // allLaps is sorted by date_start (initSession)
     const lIdx = findIndexBefore<Lap>(allLaps, timeMs, (l) => new Date(l.date_start).getTime());
     if (lIdx !== -1) {
         setCurrentLap(allLaps[lIdx].lap_number);
@@ -488,22 +455,19 @@ const App: React.FC = () => {
       setCurrentTime(time);
       updateViewState(time);
       
-      // If seek forces a re-buffer
       if (time.getTime() > bufferedUntilRef.current || time.getTime() < bufferedUntilRef.current - 600000 ) { 
            locationBufferRef.current = new Map(); 
-           carDataBufferRef.current = []; // Clear telemetry buffer
+           carDataBufferRef.current = [];
            bufferedUntilRef.current = time.getTime();
            fetchDynamicBuffer(time, 30000);
       }
   };
 
   const toggleDriverSelection = async (driverNumber: number) => {
-    // If selecting a new driver, we need to clear current telemetry buffer and fetch for them immediately
     if (selectedDriver !== driverNumber) {
         setSelectedDriver(driverNumber);
         carDataBufferRef.current = [];
         if (currentTimeRef.current) {
-            // Fetch telemetry for current buffer window
             await fetchDynamicBuffer(currentTimeRef.current, 10000);
         }
     } else {
@@ -513,10 +477,21 @@ const App: React.FC = () => {
     }
   };
 
+  if (view === 'LANDING') {
+      return <LandingPage years={YEARS} onSelectSession={handleSessionSelect} />;
+  }
+
   return (
-    <div className="flex flex-col h-screen bg-f1-dark text-white overflow-hidden">
+    <div className="flex flex-col h-screen bg-f1-dark text-white overflow-hidden animate-in fade-in duration-500">
       {/* Header */}
       <header className="h-16 bg-f1-red flex items-center px-6 shadow-md z-10">
+        <button 
+            onClick={handleBackToMenu}
+            className="mr-4 p-2 hover:bg-black/20 rounded-full transition-colors group"
+            title="Back to Event Selection"
+        >
+            <ArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
+        </button>
         <ChevronsRight size={32} strokeWidth={3} className="mr-2" />
         <h1 className="text-2xl font-bold italic tracking-tighter">
           F1<span className="font-light">REPLAY</span>
@@ -539,17 +514,8 @@ const App: React.FC = () => {
 
         {/* Left: Map Area */}
         <div className="flex-1 flex flex-col p-4 gap-4 relative">
-          {/* Controls */}
           <SessionControls
-            years={YEARS}
-            selectedYear={year}
-            onYearChange={setYear}
-            meetings={meetings}
-            selectedMeeting={selectedMeeting}
-            onMeetingChange={setSelectedMeeting}
-            sessions={sessions}
             selectedSession={selectedSession}
-            onSessionChange={setSelectedSession}
             isPlaying={isPlaying}
             onPlayPause={() => setIsPlaying(!isPlaying)}
             currentTime={currentTime}
@@ -562,13 +528,13 @@ const App: React.FC = () => {
             totalLaps={totalLaps}
           />
 
-          {/* Map Container */}
           <div className="flex-1 min-h-0 bg-f1-carbon rounded-lg border border-f1-gray p-1">
              <TrackMap 
                trackLocations={trackLayout} 
                carLocations={currentCarLocations} 
                drivers={drivers}
                selectedDriver={selectedDriver}
+               session={selectedSession}
              />
           </div>
         </div>

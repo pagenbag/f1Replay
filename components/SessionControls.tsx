@@ -1,17 +1,9 @@
 import React, { useRef } from 'react';
 import { Play, Pause } from 'lucide-react';
-import { Meeting, Session } from '../types';
+import { Session } from '../types';
 
 interface SessionControlsProps {
-  years: number[];
-  selectedYear: number;
-  onYearChange: (year: number) => void;
-  meetings: Meeting[];
-  selectedMeeting: Meeting | null;
-  onMeetingChange: (meeting: Meeting) => void;
-  sessions: Session[];
   selectedSession: Session | null;
-  onSessionChange: (session: Session) => void;
   isPlaying: boolean;
   onPlayPause: () => void;
   currentTime: Date | null;
@@ -25,15 +17,7 @@ interface SessionControlsProps {
 }
 
 const SessionControls: React.FC<SessionControlsProps> = ({
-  years,
-  selectedYear,
-  onYearChange,
-  meetings,
-  selectedMeeting,
-  onMeetingChange,
-  sessions,
   selectedSession,
-  onSessionChange,
   isPlaying,
   onPlayPause,
   currentTime,
@@ -78,60 +62,9 @@ const SessionControls: React.FC<SessionControlsProps> = ({
     : 0;
 
   return (
-    <div className="bg-f1-carbon p-4 rounded-lg shadow-lg border-b-4 border-f1-red space-y-4">
-      
-      {/* Selection Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="space-y-1">
-          <label className="text-xs text-f1-gray uppercase font-bold tracking-wider">Year</label>
-          <select 
-            className="w-full bg-f1-dark border border-f1-gray rounded p-2 text-white focus:border-f1-red outline-none"
-            value={selectedYear}
-            onChange={(e) => onYearChange(Number(e.target.value))}
-          >
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs text-f1-gray uppercase font-bold tracking-wider">Event</label>
-          <select 
-            className="w-full bg-f1-dark border border-f1-gray rounded p-2 text-white focus:border-f1-red outline-none"
-            value={selectedMeeting?.meeting_key || ''}
-            onChange={(e) => {
-              const m = meetings.find(m => m.meeting_key === Number(e.target.value));
-              if (m) onMeetingChange(m);
-            }}
-            disabled={meetings.length === 0}
-          >
-            <option value="">Select Event...</option>
-            {meetings.map(m => (
-              <option key={m.meeting_key} value={m.meeting_key}>{m.meeting_official_name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs text-f1-gray uppercase font-bold tracking-wider">Session</label>
-          <select 
-            className="w-full bg-f1-dark border border-f1-gray rounded p-2 text-white focus:border-f1-red outline-none"
-            value={selectedSession?.session_key || ''}
-            onChange={(e) => {
-              const s = sessions.find(s => s.session_key === Number(e.target.value));
-              if (s) onSessionChange(s);
-            }}
-            disabled={sessions.length === 0}
-          >
-            <option value="">Select Session...</option>
-            {sessions.map(s => (
-              <option key={s.session_key} value={s.session_key}>{s.session_name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
+    <div className="bg-f1-carbon p-3 rounded-lg shadow-lg border-b-4 border-f1-red">
       {/* Playback Controls */}
-      <div className="flex flex-col md:flex-row items-center justify-between bg-f1-dark p-3 rounded gap-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button 
             onClick={onPlayPause}
@@ -164,7 +97,6 @@ const SessionControls: React.FC<SessionControlsProps> = ({
                 style={{ width: `${progress}%` }}
              />
           </div>
-          {/* Hover indicator could go here */}
         </div>
 
         <div className="flex items-center gap-2">

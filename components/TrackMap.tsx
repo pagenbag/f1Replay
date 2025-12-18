@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react';
-import { Location, Driver } from '../types';
+import { Location, Driver, Session } from '../types';
 
 interface TrackMapProps {
   trackLocations: Location[];
   carLocations: Location[];
   drivers: Driver[];
   selectedDriver: number | null;
+  session: Session | null;
 }
 
-const TrackMap: React.FC<TrackMapProps> = ({ trackLocations, carLocations, drivers, selectedDriver }) => {
+const TrackMap: React.FC<TrackMapProps> = ({ trackLocations, carLocations, drivers, selectedDriver, session }) => {
   
   // Calculate bounding box for the track
   const { minX, maxX, minY, maxY } = useMemo(() => {
@@ -76,7 +77,7 @@ const TrackMap: React.FC<TrackMapProps> = ({ trackLocations, carLocations, drive
   }
 
   return (
-    <div className="w-full h-full bg-f1-carbon rounded-lg shadow-lg overflow-hidden relative">
+    <div className="w-full h-full bg-f1-carbon rounded-lg shadow-lg overflow-hidden relative group">
       <svg 
         viewBox={viewBox} 
         className="w-full h-full p-4"
@@ -140,6 +141,25 @@ const TrackMap: React.FC<TrackMapProps> = ({ trackLocations, carLocations, drive
           );
         })}
       </svg>
+      
+      {/* Info Overlay */}
+      {session && (
+          <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
+              <div className="bg-black/60 backdrop-blur-md p-4 rounded-lg border-l-4 border-f1-red shadow-2xl">
+                   <div className="text-gray-300 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
+                      <span>{session.year}</span>
+                      <span className="w-1 h-1 bg-gray-500 rounded-full"></span>
+                      <span>{session.country_name}</span>
+                   </div>
+                   <div className="text-3xl font-black italic text-white tracking-tighter leading-none uppercase drop-shadow-lg">
+                      {session.session_name}
+                   </div>
+                   <div className="text-sm font-bold text-f1-red mt-1 uppercase tracking-wide">
+                      {session.circuit_short_name}
+                   </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };
