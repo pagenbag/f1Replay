@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ChevronsRight } from 'lucide-react';
 import { YEARS } from './constants';
-import { getMeetings, getSessions, getDrivers, getLaps, getLocations, getWeather, getRaceControl, getTeamRadio, getPositions, getIntervals, getCarData, getStartingGrid } from './services/openf1';
-import { Meeting, Session, Driver, Location, Weather, RaceControl, TeamRadio, Position, Interval, Lap, CarData, StartingGrid } from './types';
+import { getMeetings, getSessions, getDrivers, getLaps, getLocations, getWeather, getRaceControl, getTeamRadio, getPositions, getIntervals, getCarData } from './services/openf1';
+import { Meeting, Session, Driver, Location, Weather, RaceControl, TeamRadio, Position, Interval, Lap, CarData } from './types';
 import SessionControls from './components/SessionControls';
 import TrackMap from './components/TrackMap';
 import InfoPanel from './components/InfoPanel';
@@ -56,6 +57,8 @@ const App: React.FC = () => {
   const [sessionEnd, setSessionEnd] = useState<Date | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
+  const [currentLap, setCurrentLap] = useState<number>(0);
+  const [totalLaps, setTotalLaps] = useState<number>(0);
   
   // --- Real-time Data Buffer ---
   const [currentCarLocations, setCurrentCarLocations] = useState<Location[]>([]);
@@ -137,6 +140,8 @@ const App: React.FC = () => {
       setCurrentCarData(null);
       setSelectedDriver(null);
       setStartingPositions(new Map());
+      setTotalLaps(0);
+      setCurrentLap(0);
 
       const sessionKey = selectedSession.session_key;
       const startStr = selectedSession.date_start;
@@ -149,13 +154,24 @@ const App: React.FC = () => {
 
       // 2. Fetch Laps & Track Map
       setLoadStatus("Fetching laps & map...");
-      const laps = await getLaps(sessionKey);
+      let laps = await getLaps(sessionKey);
+      
+      // Sort laps by start time for the timeline and finding current lap
+      laps.sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime());
       setAllLaps(laps);
       
-      const validLaps = laps.filter(l => l.lap_duration && !l.is_pit_out_lap).sort((a, b) => a.lap_duration - b.lap_duration);
+      // Calculate total laps (max lap number found)
+      if (laps.length > 0) {
+        const maxLap = Math.max(...laps.map(l => l.lap_number));
+        setTotalLaps(maxLap);
+      }
+
+      // Filter for valid laps for track generation (needs duration)
+      const validLapsForMap = laps.filter(l => l.lap_duration && !l.is_pit_out_lap).sort((a, b) => a.lap_duration - b.lap_duration);
+      
       let trackPoints: Location[] = [];
-      if (validLaps.length > 0) {
-        const bestLap = validLaps[0];
+      if (validLapsForMap.length > 0) {
+        const bestLap = validLapsForMap[0];
         trackPoints = await getLocations(sessionKey, bestLap.date_start, new Date(new Date(bestLap.date_start).getTime() + bestLap.lap_duration * 1000).toISOString(), bestLap.driver_number);
       } else {
          const s = new Date(startStr);
@@ -170,13 +186,12 @@ const App: React.FC = () => {
       // 3. Fetch Full Session Data (Parallel)
       setLoadStatus("Downloading session data...");
       try {
-        const [w, rc, tr, pos, ints, grid] = await Promise.all([
+        const [w, rc, tr, pos, ints] = await Promise.all([
             getWeather(sessionKey, startStr, endStr),
             getRaceControl(sessionKey, startStr, endStr),
             getTeamRadio(sessionKey, startStr, endStr),
             getPositions(sessionKey, startStr, endStr),
             getIntervals(sessionKey, startStr, endStr),
-            getStartingGrid(sessionKey)
         ]);
 
         // Sort data once
@@ -188,21 +203,14 @@ const App: React.FC = () => {
             intervals: ints.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
         };
 
-        // Determine starting positions from API or Fallback
+        // Determine starting positions (First recorded position in session)
         const starts = new Map<number, number>();
-        
-        if (grid && grid.length > 0) {
-            // Use Official Starting Grid
-            grid.forEach(g => starts.set(g.driver_number, g.position));
-        } else {
-            // Fallback: Find first position entry for each driver
-            driversData.forEach(d => {
-                const firstPos = fullSessionDataRef.current.positions.find(p => p.driver_number === d.driver_number);
-                if (firstPos) {
-                    starts.set(d.driver_number, firstPos.position);
-                }
-            });
-        }
+        driversData.forEach(d => {
+            const firstPos = fullSessionDataRef.current.positions.find(p => p.driver_number === d.driver_number);
+            if (firstPos) {
+                starts.set(d.driver_number, firstPos.position);
+            }
+        });
         setStartingPositions(starts);
 
       } catch (e) {
@@ -451,6 +459,16 @@ const App: React.FC = () => {
         }
         setCurrentIntervals(Array.from(latestInt.values()));
     }
+
+    // 4. Update Current Lap
+    // Find the latest lap start event across all drivers that happened before current time
+    // allLaps is sorted by date_start (initSession)
+    const lIdx = findIndexBefore<Lap>(allLaps, timeMs, (l) => new Date(l.date_start).getTime());
+    if (lIdx !== -1) {
+        setCurrentLap(allLaps[lIdx].lap_number);
+    } else {
+        setCurrentLap(0);
+    }
   };
 
   const handleSeek = (time: Date) => {
@@ -487,6 +505,7 @@ const App: React.FC = () => {
     <div className="flex flex-col h-screen bg-f1-dark text-white overflow-hidden">
       {/* Header */}
       <header className="h-16 bg-f1-red flex items-center px-6 shadow-md z-10">
+        <ChevronsRight size={32} strokeWidth={3} className="mr-2" />
         <h1 className="text-2xl font-bold italic tracking-tighter">
           F1<span className="font-light">REPLAY</span>
         </h1>
@@ -527,6 +546,8 @@ const App: React.FC = () => {
             playbackSpeed={playbackSpeed}
             onSpeedChange={setPlaybackSpeed}
             onSeek={handleSeek}
+            currentLap={currentLap}
+            totalLaps={totalLaps}
           />
 
           {/* Map Container */}

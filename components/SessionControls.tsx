@@ -20,6 +20,8 @@ interface SessionControlsProps {
   playbackSpeed: number;
   onSpeedChange: (speed: number) => void;
   onSeek: (time: Date) => void;
+  currentLap: number;
+  totalLaps: number;
 }
 
 const SessionControls: React.FC<SessionControlsProps> = ({
@@ -39,7 +41,9 @@ const SessionControls: React.FC<SessionControlsProps> = ({
   sessionEndTime,
   playbackSpeed,
   onSpeedChange,
-  onSeek
+  onSeek,
+  currentLap,
+  totalLaps
 }) => {
   const progressBarRef = useRef<HTMLDivElement>(null);
 
@@ -138,9 +142,12 @@ const SessionControls: React.FC<SessionControlsProps> = ({
           </button>
           
           <div className="flex flex-col min-w-[80px]">
-            <span className="text-xs text-gray-400 font-mono">SESSION TIME</span>
-            <span className="text-xl font-bold font-mono tracking-widest text-white">
+            <span className="text-xs text-gray-400 font-mono leading-none">SESSION TIME</span>
+            <span className="text-xl font-bold font-mono tracking-widest text-white leading-tight">
               {currentTime && sessionStartTime ? formatDeltaTime(currentTime, sessionStartTime) : '00:00:00'}
+            </span>
+            <span className="text-xs text-f1-red font-bold font-mono mt-0.5">
+               LAP {currentLap} / {totalLaps}
             </span>
           </div>
         </div>

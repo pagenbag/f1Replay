@@ -109,10 +109,3 @@ export interface CarData {
   brake: number;
   drs: number;
 }
-
-export interface StartingGrid {
-  meeting_key: number;
-  session_key: number;
-  driver_number: number;
-  position: number;
-}

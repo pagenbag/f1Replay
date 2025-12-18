@@ -146,6 +146,10 @@ const InfoPanel: React.FC<InfoPanelProps> = ({
               const startPos = startingPositions.get(driver.driver_number);
               const posDiff = startPos ? startPos - visualPos : 0;
               
+              // DRS Logic
+              const intervalVal = interval?.interval;
+              const isDRS = intervalVal !== null && intervalVal !== undefined && intervalVal < 1.0;
+
               return (
                 <div 
                   key={driver.driver_number} 
@@ -190,6 +194,7 @@ const InfoPanel: React.FC<InfoPanelProps> = ({
                         <div className="flex items-baseline gap-2 mb-1">
                             <span className="font-bold text-lg leading-none">{driver.name_acronym}</span>
                             <span className="text-xs text-gray-400 truncate hidden sm:inline">{driver.last_name.toUpperCase()}</span>
+                            <span className="text-sm font-bold text-f1-red ml-1">#{driver.driver_number}</span>
                         </div>
                         
                         {/* Telemetry Row */}
@@ -202,7 +207,9 @@ const InfoPanel: React.FC<InfoPanelProps> = ({
                              {/* Interval */}
                              <div className="flex flex-col leading-none">
                                 <span className="text-[10px] text-gray-500 uppercase">Int</span>
-                                <span className="text-white">{interval?.interval ? `+ ${interval.interval}` : '-'}</span>
+                                <span className={`${isDRS ? 'text-green-500 font-bold' : 'text-white'}`}>
+                                    {interval?.interval ? `+ ${interval.interval}` : '-'}
+                                </span>
                              </div>
                              {/* Last Lap */}
                              <div className="flex flex-col leading-none ml-auto">
