@@ -1,0 +1,5 @@
+{
+  "name": "F1 Replay Live",
+  "description": "Real-time F1 session replay using OpenF1 data with track visualization and telemetry.",
+  "requestFramePermissions": []
+}
